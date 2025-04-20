@@ -3,7 +3,7 @@ import re
 from typing import List
 
 
-def _listdir(path: str) -> List[str]:
+def list_dir(path: str) -> List[str]:
     """
     List the contents of a directory, sorted alphabetically for letters and numerically for numbers.
 
@@ -13,7 +13,7 @@ def _listdir(path: str) -> List[str]:
     Returns:
         List[str]: Sorted list of directory contents.
     """
-    _validate_directory(path)
+    validate_dir(path)
 
     def sort_key(name: str):
         parts = re.split(r'(\d+)', name)
@@ -22,7 +22,15 @@ def _listdir(path: str) -> List[str]:
     return sorted(os.listdir(path), key=sort_key)
 
 
-def _validate_directory(path: str) -> None:
+def validate_dir(path: str) -> None:
+    """
+    Validate if the given path is a directory and exists.
+    Args:
+        path (str): The path to validate.
+    Raises:
+        FileNotFoundError: If the path does not exist.
+        NotADirectoryError: If the path is not a directory.
+    """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Path {path} does not exist.")
     if not os.path.isdir(path):

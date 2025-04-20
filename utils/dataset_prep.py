@@ -1,6 +1,7 @@
 import os
+import pandas as pd
 from typing import List, Tuple
-from utils import _listdir, _validate_directory
+from . import list_dir, validate_dir
 
 
 def generate_datalist(dataset_path: str, dataset_name: str = 'private', output_dir: str = './') -> None:
@@ -22,18 +23,19 @@ def generate_datalist(dataset_path: str, dataset_name: str = 'private', output_d
         raise ValueError(f"Unsupported dataset name: {dataset_name}")
 
 
+def _get_image_pairs(low_dir: str, high_dir: str) -> List[Tuple[str, str]]:
+    validate_dir(low_dir)
+    validate_dir(high_dir)
+
+    low_list = list_dir(low_dir)
+    high_list = list_dir(high_dir)
+
+    return [(os.path.join(low_dir, path), os.path.join(high_dir, path))
+            for path in low_list if path.endswith('.png') and path in high_list]
+
+
 def _LOL(dataset_path: str, output_dir: str) -> None:
-    _validate_directory(dataset_path)
-
-    def _get_image_pairs(low_dir: str, high_dir: str) -> List[Tuple[str, str]]:
-        _validate_directory(low_dir)
-        _validate_directory(high_dir)
-
-        low_list = _listdir(low_dir)
-        high_list = _listdir(high_dir)
-
-        return [(os.path.join(low_dir, path), os.path.join(high_dir, path))
-                for path in low_list if path.endswith('.png') and path in high_list]
+    validate_dir(dataset_path)
 
     train_list = _get_image_pairs(os.path.join(dataset_path, 'our485', 'low'),
                                   os.path.join(dataset_path, 'our485', 'high'))
@@ -48,17 +50,7 @@ def _LOL(dataset_path: str, output_dir: str) -> None:
 
 
 def _LOLv2(dataset_path: str, output_dir: str) -> None:
-    _validate_directory(dataset_path)
-
-    def _get_image_pairs(low_dir: str, normal_dir: str) -> List[Tuple[str, str]]:
-        _validate_directory(low_dir)
-        _validate_directory(normal_dir)
-
-        low_list = _listdir(low_dir)
-        normal_list = _listdir(normal_dir)
-
-        return [(os.path.join(low_dir, path), os.path.join(normal_dir, path))
-                for path in low_list if path.endswith('.png') and path in normal_list]
+    validate_dir(dataset_path)
 
     train_list = _get_image_pairs(os.path.join(dataset_path, 'Train', 'Low'),
                                   os.path.join(dataset_path, 'Train', 'Normal'))
@@ -83,10 +75,9 @@ def _private(dataset_path: str, output_dir: str) -> None:
 def _write_csv(file_path: str, data_list: List[Tuple[str, str]]) -> None:
     if os.path.exists(file_path):
         overwrite = input(
-            f"\033[33m {file_path} already exists. Do you want to overwrite it? (y/[n]): \033[0m")
-        if overwrite.lower() != 'y':
+            f"\033[33m {file_path} already exists. Do you want to overwrite it? (y/[n]): \033[0m").strip().lower()
+        if overwrite != 'y':
             return
 
-    with open(file_path, 'w') as f:
-        for low_path, high_path in data_list:
-            f.write(f"{low_path}\t{high_path}\n")
+    df = pd.DataFrame(data_list, columns=['low_path', 'high_path'])
+    df.to_csv(file_path, sep='\t', index=False, header=False)
