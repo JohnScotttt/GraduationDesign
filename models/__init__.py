@@ -68,7 +68,7 @@ class LowLightEnhancement(nn.Module):
         detail_restored = self.decoder(detail_feat)
         
         # Color restoration
-        color_restored, color_weight = self.color_restoration(x)
+        color_restored = self.color_restoration(x)
         
         # Normalize branch weights
         branch_weight = F.softmax(self.branch_weight, dim=0)

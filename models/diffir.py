@@ -72,12 +72,6 @@ class ColorRestoration(nn.Module):
             nn.Sigmoid()
         )
         
-        # Adaptive weight generation
-        self.weight_generator = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(base_channels*2, 1, 1),
-            nn.Sigmoid()
-        )
         
     def get_time_embedding(self, t):
         """Generate time embedding"""
@@ -112,7 +106,4 @@ class ColorRestoration(nn.Module):
         # Color reconstruction
         restored = self.color_reconstruction(x_t)
         
-        # Generate adaptive weight
-        weight = self.weight_generator(x_t)
-        
-        return restored, weight
+        return restored
