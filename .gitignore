@@ -3,3 +3,4 @@ test.py
 __pycache__
 data/eval.tsv
 data/train.tsv
+outputs/

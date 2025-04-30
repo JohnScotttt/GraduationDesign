@@ -1,6 +1,8 @@
 import os
 import re
-from typing import List
+from typing import Any, Dict, List
+
+import yaml
 
 
 def list_dir(path: str) -> List[str]:
@@ -35,3 +37,18 @@ def validate_dir(path: str) -> None:
         raise FileNotFoundError(f"Path {path} does not exist.")
     if not os.path.isdir(path):
         raise NotADirectoryError(f"Path {path} is not a directory.")
+
+
+def load_config(config_path: str) -> Dict[str, Any]:
+    """
+    从YAML配置文件加载配置
+
+    Args:
+        config_path (str): 配置文件路径
+
+    Returns:
+        Dict[str, Any]: 配置字典
+    """
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+    return config

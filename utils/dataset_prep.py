@@ -1,10 +1,12 @@
 import os
-import pandas as pd
 from typing import List, Tuple
-from . import list_dir, validate_dir
+
+import pandas as pd
+
+from utils import list_dir, validate_dir
 
 
-def generate_datalist(dataset_path: str, dataset_name: str = 'private', output_dir: str = './') -> None:
+def generate_datalist(dataset_path: str, dataset_name: str = 'LOL', output_dir: str = './') -> None:
     """
     Generate a .csv file containing the pairs of high and low image paths.
 
