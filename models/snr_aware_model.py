@@ -17,6 +17,35 @@ def denoise(input_tensor: torch.Tensor) -> torch.Tensor:
     return F.conv2d(input_tensor, kernel, padding=padding)
 
 
+def compute_snr_map(x: torch.Tensor) -> torch.Tensor:
+    """
+    计算输入图像的SNR图
+    """
+    # 转换为灰度图
+    if x.shape[1] == 3:
+        # RGB转灰度
+        weights = torch.tensor([0.299, 0.587, 0.114],
+                               device=x.device).view(1, 3, 1, 1)
+        gray = torch.sum(x * weights, dim=1, keepdim=True)
+    else:
+        gray = x
+
+    # 使用无学习的去噪操作
+    denoised = denoise(gray)
+
+    # 估计噪声
+    noise = torch.abs(gray - denoised)
+
+    # 计算SNR (Signal-to-Noise Ratio)
+    epsilon = 1e-8  # 防止除零
+    snr_map = denoised / (noise + epsilon)
+
+    # 归一化SNR图到[0,1]区间
+    snr_map = torch.clamp(snr_map / (snr_map.max() + epsilon), 0, 1)
+
+    return snr_map
+
+
 class ResidualBlock(nn.Module):
     """
     用于短程分支的残差块
@@ -352,35 +381,9 @@ class LowLightEnhancement(nn.Module):
         # 最终输出层
         self.final = nn.Sigmoid()
 
-    def compute_snr_map(self, x):
-        """
-        计算输入图像的SNR图
-        """
-        # 转换为灰度图
-        if x.shape[1] == 3:
-            # RGB转灰度
-            gray = 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
-        else:
-            gray = x
-
-        # 使用无学习的去噪操作
-        denoised = denoise(gray)
-
-        # 估计噪声
-        noise = torch.abs(gray - denoised)
-
-        # 计算SNR (Signal-to-Noise Ratio)
-        epsilon = 1e-8  # 防止除零
-        snr_map = denoised / (noise + epsilon)
-
-        # 归一化SNR图到[0,1]区间
-        snr_map = torch.clamp(snr_map / (snr_map.max() + epsilon), 0, 1)
-
-        return snr_map
-
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # 计算SNR图
-        snr_map = self.compute_snr_map(x)
+        snr_map = compute_snr_map(x)
 
         # 编码器前向传播
         e1 = self.enc1(x)
@@ -413,8 +416,14 @@ class LowLightEnhancement(nn.Module):
 
         # 解码器前向传播
         d4 = self.dec4(fused_feature, e3)
+        d4 = d4 + e3  # 添加残差连接
+        
         d3 = self.dec3(d4, e2)
+        d3 = d3 + e2  # 添加残差连接
+        
         d2 = self.dec2(d3, e1)
+        d2 = d2 + e1  # 添加残差连接
+        
         d1 = self.dec1(d2)
 
         # 确保最终输出与输入具有相同的空间尺寸
@@ -422,7 +431,10 @@ class LowLightEnhancement(nn.Module):
             d1 = F.interpolate(
                 d1, size=x.shape[2:], mode='bilinear', align_corners=False)
 
+        # d1作为残差R，添加到原始输入上
+        enhanced = x + d1
+        
         # 最终输出
-        enhanced = self.final(d1)
+        enhanced = self.final(enhanced)
 
         return enhanced, snr_map

@@ -111,7 +111,7 @@ def main():
     epochs = int(config['epochs'])
     batch_size = int(config['batch_size'])
     train_tsv_file = config['train_tsv_file']
-    val_tsv_file = config['val_tsv_file']
+    val_tsv_file = config['eval_tsv_file']
     learning_rate = float(config.get('learning_rate', 1e-4))
     weight_decay = float(config.get('weight_decay', 1e-5))
 
@@ -150,7 +150,16 @@ def main():
     )
 
     # 设置学习率调度器
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    # 使用CosineAnnealingWarmRestarts作为主要调度器
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer,
+        T_0=10,  # 第一次重启的周期
+        T_mult=2,  # 每次重启后周期翻倍
+        eta_min=learning_rate * 0.01  # 最小学习率
+    )
+
+    # 使用ReduceLROnPlateau作为辅助调度器
+    plateau_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=5
     )
 
@@ -188,6 +197,9 @@ def main():
 
             # 参数更新
             optimizer.step()
+
+            # 更新学习率（每个batch更新一次）
+            scheduler.step(epoch)
 
             # 累积损失
             train_loss += loss.item()
@@ -286,12 +298,15 @@ def main():
         writer.add_scalar('Loss/val', avg_val_loss, epoch)
         writer.add_scalar('Metrics/PSNR', avg_val_psnr, epoch)
         writer.add_scalar('Metrics/SSIM', avg_val_ssim, epoch)
+        writer.add_scalar(
+            'Learning Rate', optimizer.param_groups[0]['lr'], epoch)
 
-        # 更新学习率
-        scheduler.step(avg_val_loss)
+        # 更新学习率（每个epoch更新一次）
+        plateau_scheduler.step(avg_val_loss)
 
         # 打印训练信息
-        print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}, PSNR: {avg_val_psnr:.2f}, SSIM: {avg_val_ssim:.4f}")
+        print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}, "
+              f"PSNR: {avg_val_psnr:.2f}, SSIM: {avg_val_ssim:.4f}, lr: {optimizer.param_groups[0]['lr']:.6f}")
 
         # 保存最佳模型（基于验证损失）
         if avg_val_loss < best_val_loss:

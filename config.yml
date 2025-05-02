@@ -1,8 +1,8 @@
 epochs: 100
-batch_size: 4
+batch_size: 8
 train_tsv_file: "data/train.tsv"
-val_tsv_file: "data/eval.tsv"
-learning_rate: 1e-4
+eval_tsv_file: "data/eval.tsv"
+learning_rate: 0.001
 output_dir: "outputs"
 
 # 模型参数
