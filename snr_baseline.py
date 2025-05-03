@@ -13,21 +13,8 @@ from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
 from data.dataloader import get_dataloader
-from models import LowLightEnhancement
+from models import LowLightEnhancement, DetailLoss
 from utils import load_config
-
-
-# 定义损失函数
-class ReconstructionLoss(nn.Module):
-    def __init__(self):
-        super(ReconstructionLoss, self).__init__()
-        self.l1_loss = nn.L1Loss()
-        self.mse_loss = nn.MSELoss()
-
-    def forward(self, pred, target):
-        l1 = self.l1_loss(pred, target)
-        mse = self.mse_loss(pred, target)
-        return l1 + 0.5 * mse
 
 
 # 计算PSNR（峰值信噪比）
@@ -140,7 +127,7 @@ def main():
     ).to(device)
 
     # 设置损失函数
-    criterion = ReconstructionLoss().to(device)
+    criterion = DetailLoss().to(device)
 
     # 设置优化器
     optimizer = optim.Adam(
@@ -150,16 +137,7 @@ def main():
     )
 
     # 设置学习率调度器
-    # 使用CosineAnnealingWarmRestarts作为主要调度器
-    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer,
-        T_0=10,  # 第一次重启的周期
-        T_mult=2,  # 每次重启后周期翻倍
-        eta_min=learning_rate * 0.01  # 最小学习率
-    )
-
-    # 使用ReduceLROnPlateau作为辅助调度器
-    plateau_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=5
     )
 
@@ -172,39 +150,21 @@ def main():
     best_ssim = 0.0
 
     for epoch in range(epochs):
-        # 训练阶段
         model.train()
         train_loss = 0.0
         train_pbar = tqdm(
             train_loader, desc=f'Epoch {epoch+1}/{epochs} [Train]')
 
         for batch_idx, (low_light, ground_truth) in enumerate(train_pbar):
-            # 移动数据到设备
             low_light = low_light.to(device)
             ground_truth = ground_truth.to(device)
-
-            # 梯度清零
             optimizer.zero_grad()
-
-            # 前向传播
             enhanced, snr_map = model(low_light)
-
-            # 计算损失
             loss = criterion(enhanced, ground_truth)
-
-            # 反向传播
             loss.backward()
-
-            # 参数更新
             optimizer.step()
-
-            # 更新学习率（每个batch更新一次）
-            scheduler.step(epoch)
-
-            # 累积损失
             train_loss += loss.item()
 
-            # 更新进度条
             train_pbar.set_postfix({
                 'loss': loss.item(),
                 'avg_loss': train_loss / (batch_idx + 1)
@@ -225,19 +185,15 @@ def main():
                         sample_low, sample_enhanced, sample_gt
                     ], nrow=3, normalize=True)
 
-                    # 保存到TensorBoard
                     writer.add_image(
                         f'samples/train_batch_{batch_idx}', grid, epoch)
 
-                    # 保存SNR图
                     writer.add_image(f'snr_maps/train_batch_{batch_idx}',
                                      sample_snr, epoch, dataformats='CHW')
 
-        # 计算平均训练损失
         avg_train_loss = train_loss / len(train_loader)
         writer.add_scalar('Loss/train', avg_train_loss, epoch)
 
-        # 验证阶段
         model.eval()
         val_loss = 0.0
         val_psnr_total = 0.0
@@ -246,26 +202,16 @@ def main():
 
         with torch.no_grad():
             for batch_idx, (low_light, ground_truth) in enumerate(val_pbar):
-                # 移动数据到设备
                 low_light = low_light.to(device)
                 ground_truth = ground_truth.to(device)
-
-                # 前向传播
                 enhanced, snr_map = model(low_light)
-
-                # 计算损失
                 loss = criterion(enhanced, ground_truth)
-
-                # 计算评价指标
                 psnr = calculate_psnr(enhanced, ground_truth)
                 ssim = calculate_ssim(enhanced, ground_truth)
-
-                # 累积损失和指标
                 val_loss += loss.item()
                 val_psnr_total += psnr
                 val_ssim_total += ssim
 
-                # 更新进度条
                 val_pbar.set_postfix({
                     'loss': loss.item(),
                     'psnr': psnr,
@@ -285,30 +231,24 @@ def main():
                         sample_low, sample_enhanced, sample_gt
                     ], nrow=3, normalize=True)
 
-                    # 保存到TensorBoard
                     writer.add_image('samples/val', grid, epoch)
 
-        # 计算平均验证损失和指标
         val_count = len(val_loader)
         avg_val_loss = val_loss / val_count
         avg_val_psnr = val_psnr_total / val_count
         avg_val_ssim = val_ssim_total / val_count
 
-        # 记录到TensorBoard
         writer.add_scalar('Loss/val', avg_val_loss, epoch)
         writer.add_scalar('Metrics/PSNR', avg_val_psnr, epoch)
         writer.add_scalar('Metrics/SSIM', avg_val_ssim, epoch)
         writer.add_scalar(
             'Learning Rate', optimizer.param_groups[0]['lr'], epoch)
 
-        # 更新学习率（每个epoch更新一次）
-        plateau_scheduler.step(avg_val_loss)
+        scheduler.step(avg_val_loss)
 
-        # 打印训练信息
         print(f"Epoch [{epoch+1}/{epochs}] - Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}, "
               f"PSNR: {avg_val_psnr:.2f}, SSIM: {avg_val_ssim:.4f}, lr: {optimizer.param_groups[0]['lr']:.6f}")
 
-        # 保存最佳模型（基于验证损失）
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             torch.save({
@@ -347,7 +287,6 @@ def main():
             }, f"{output_dir}/checkpoints/best_model_ssim.pth")
             print(f"保存基于SSIM的最佳模型, SSIM: {best_ssim:.4f}")
 
-        # 定期保存检查点
         if (epoch + 1) % 10 == 0:
             torch.save({
                 'epoch': epoch,
@@ -358,7 +297,6 @@ def main():
                 'ssim': avg_val_ssim,
             }, f"{output_dir}/checkpoints/epoch_{epoch+1}.pth")
 
-    # 关闭TensorBoard写入器
     writer.close()
     print(
         f"训练完成！最佳验证损失: {best_val_loss:.4f}, 最佳PSNR: {best_psnr:.2f} dB, 最佳SSIM: {best_ssim:.4f}")

@@ -139,11 +139,11 @@ class EncoderBlock(nn.Module):
     编码器块
     """
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, stride=2):
         super(EncoderBlock, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels,
-                      kernel_size=3, stride=2, padding=1),
+                      kernel_size=3, stride=stride, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
@@ -349,11 +349,10 @@ class LowLightEnhancement(nn.Module):
                  patch_size=16, num_transformer_layers=4, num_heads=8):
         super(LowLightEnhancement, self).__init__()
 
-        # 编码器
-        self.enc1 = EncoderBlock(in_channels, base_channels)  # 1/2
-        self.enc2 = EncoderBlock(base_channels, base_channels * 2)  # 1/4
-        self.enc3 = EncoderBlock(base_channels * 2, base_channels * 4)  # 1/8
-        self.enc4 = EncoderBlock(base_channels * 4, transformer_dim)  # 1/16
+        # 编码器 - 3层，步幅分别为1、2、2
+        self.enc1 = EncoderBlock(in_channels, base_channels, stride=1)  # 保持原始尺寸
+        self.enc2 = EncoderBlock(base_channels, base_channels * 2, stride=2)  # 1/2
+        self.enc3 = EncoderBlock(base_channels * 2, transformer_dim, stride=2)  # 1/4
 
         # 长程分支 - SNR感知Transformer
         self.long_range = SNRAwareTransformer(
@@ -366,13 +365,10 @@ class LowLightEnhancement(nn.Module):
         # 短程分支 - 卷积残差网络
         self.short_range = ShortRangeBranch(transformer_dim)
 
-        # 解码器
-        self.dec4 = DecoderBlock(transformer_dim, base_channels * 4)  # 1/8
-        self.dec3 = DecoderBlock(base_channels * 4, base_channels * 2)  # 1/4
-        self.dec2 = DecoderBlock(base_channels * 2, base_channels)  # 1/2
+        # 解码器 - 2层解码器对应3层编码器
+        self.dec3 = DecoderBlock(transformer_dim, base_channels * 2)  # 1/2
+        self.dec2 = DecoderBlock(base_channels * 2, base_channels)  # 原始尺寸
         self.dec1 = nn.Sequential(
-            nn.ConvTranspose2d(base_channels, base_channels,
-                               kernel_size=2, stride=2),
             nn.Conv2d(base_channels, base_channels, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(base_channels, in_channels, kernel_size=1)
@@ -389,17 +385,16 @@ class LowLightEnhancement(nn.Module):
         e1 = self.enc1(x)
         e2 = self.enc2(e1)
         e3 = self.enc3(e2)
-        e4 = self.enc4(e3)
 
         # 长程和短程分支处理
-        long_range_feature = self.long_range(e4, snr_map)
-        short_range_feature = self.short_range(e4)
+        long_range_feature = self.long_range(e3, snr_map)
+        short_range_feature = self.short_range(e3)
 
-        # 确保长程特征与e4具有相同的空间尺寸
-        if long_range_feature.shape[2:] != e4.shape[2:]:
+        # 确保长程特征与e3具有相同的空间尺寸
+        if long_range_feature.shape[2:] != e3.shape[2:]:
             long_range_feature = F.interpolate(
                 long_range_feature,
-                size=e4.shape[2:],
+                size=e3.shape[2:],
                 mode='bilinear',
                 align_corners=False
             )
@@ -407,7 +402,7 @@ class LowLightEnhancement(nn.Module):
         # 基于SNR的特征融合
         # 调整SNR图的尺寸以匹配特征
         snr_resized = F.interpolate(
-            snr_map, size=e4.shape[2:], mode='bilinear', align_corners=False)
+            snr_map, size=e3.shape[2:], mode='bilinear', align_corners=False)
         fusion_weights = snr_resized.mean(dim=[2, 3], keepdim=True)
 
         # 融合两个分支的特征
@@ -415,14 +410,11 @@ class LowLightEnhancement(nn.Module):
             long_range_feature * (1 - fusion_weights)
 
         # 解码器前向传播
-        d4 = self.dec4(fused_feature, e3)
-        d4 = d4 + e3  # 添加残差连接
-        
-        d3 = self.dec3(d4, e2)
-        d3 = d3 + e2  # 添加残差连接
+        d3 = self.dec3(fused_feature, e2)
+        d3 = d3 + e2 # residual connection
         
         d2 = self.dec2(d3, e1)
-        d2 = d2 + e1  # 添加残差连接
+        d2 = d2
         
         d1 = self.dec1(d2)
 
