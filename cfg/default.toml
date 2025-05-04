@@ -1,0 +1,26 @@
+# Train settings
+epochs = 100
+device = "cuda"
+train_tsv_file = "data/train.tsv"
+eval_tsv_file = "data/eval.tsv"
+output_dir = "outputs"
+optimizer = "Adam"
+scheduler = "ReduceLROnPlateau"
+
+# Hyperparameters
+batch_size = 4
+learning_rate = 0.001
+weight_decay = 1e-5
+momentum = 0.9 # for SGD
+factor = 0.5
+patience = 5
+min_lr = 1e-6
+step_size = 10 # for StepLR
+in_channels = 3
+base_channels = 64
+transformer_dim = 256
+patch_size = 16
+num_transformer_layers = 4
+num_heads = 8
+epsilon = 1e-3
+lambda_vgg = 1
