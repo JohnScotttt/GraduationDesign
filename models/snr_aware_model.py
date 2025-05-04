@@ -6,9 +6,6 @@ import torch.nn.functional as F
 
 
 def denoise(input_tensor: torch.Tensor) -> torch.Tensor:
-    """
-    简单的无学习去噪操作，通过平均相邻像素值实现
-    """
     kernel_size = 3
     padding = kernel_size // 2
     kernel = torch.ones((1, 1, kernel_size, kernel_size),
@@ -18,9 +15,6 @@ def denoise(input_tensor: torch.Tensor) -> torch.Tensor:
 
 
 def compute_snr_map(x: torch.Tensor) -> torch.Tensor:
-    """
-    计算输入图像的SNR图
-    """
     # 转换为灰度图
     if x.shape[1] == 3:
         # RGB转灰度
@@ -47,10 +41,6 @@ def compute_snr_map(x: torch.Tensor) -> torch.Tensor:
 
 
 class ResidualBlock(nn.Module):
-    """
-    用于短程分支的残差块
-    """
-
     def __init__(self, channels):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
@@ -72,10 +62,6 @@ class ResidualBlock(nn.Module):
 
 
 class SNRGuidedAttention(nn.Module):
-    """
-    SNR引导的自注意力机制
-    """
-
     def __init__(self, dim, num_heads=8):
         super(SNRGuidedAttention, self).__init__()
         self.num_heads = num_heads
@@ -111,10 +97,6 @@ class SNRGuidedAttention(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    """
-    SNR感知的Transformer块
-    """
-
     def __init__(self, dim, num_heads):
         super(TransformerBlock, self).__init__()
         self.norm1 = nn.LayerNorm(dim)
@@ -135,10 +117,6 @@ class TransformerBlock(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-    """
-    编码器块
-    """
-
     def __init__(self, in_channels, out_channels, stride=2):
         super(EncoderBlock, self).__init__()
         self.conv = nn.Sequential(
@@ -156,10 +134,6 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    """
-    解码器块
-    """
-
     def __init__(self, in_channels, out_channels):
         super(DecoderBlock, self).__init__()
         self.up = nn.ConvTranspose2d(
@@ -187,10 +161,6 @@ class DecoderBlock(nn.Module):
 
 
 class SNRAwareTransformer(nn.Module):
-    """
-    实现基于SNR的长程Transformer
-    """
-
     def __init__(self, dim, num_layers=4, num_heads=8, patch_size=16):
         super(SNRAwareTransformer, self).__init__()
         self.dim = dim
@@ -327,10 +297,6 @@ class SNRAwareTransformer(nn.Module):
 
 
 class ShortRangeBranch(nn.Module):
-    """
-    短程分支，使用卷积结构
-    """
-
     def __init__(self, channels, num_blocks=6):
         super(ShortRangeBranch, self).__init__()
         self.blocks = nn.Sequential(
@@ -341,18 +307,17 @@ class ShortRangeBranch(nn.Module):
 
 
 class LowLightEnhancement(nn.Module):
-    """
-    低光照图像增强网络
-    """
-
     def __init__(self, in_channels=3, base_channels=64, transformer_dim=256,
                  patch_size=16, num_transformer_layers=4, num_heads=8):
         super(LowLightEnhancement, self).__init__()
 
         # 编码器 - 3层，步幅分别为1、2、2
-        self.enc1 = EncoderBlock(in_channels, base_channels, stride=1)  # 保持原始尺寸
-        self.enc2 = EncoderBlock(base_channels, base_channels * 2, stride=2)  # 1/2
-        self.enc3 = EncoderBlock(base_channels * 2, transformer_dim, stride=2)  # 1/4
+        self.enc1 = EncoderBlock(
+            in_channels, base_channels, stride=1)  # 保持原始尺寸
+        self.enc2 = EncoderBlock(
+            base_channels, base_channels * 2, stride=2)  # 1/2
+        self.enc3 = EncoderBlock(
+            base_channels * 2, transformer_dim, stride=2)  # 1/4
 
         # 长程分支 - SNR感知Transformer
         self.long_range = SNRAwareTransformer(
@@ -411,11 +376,11 @@ class LowLightEnhancement(nn.Module):
 
         # 解码器前向传播
         d3 = self.dec3(fused_feature, e2)
-        d3 = d3 + e2 # residual connection
-        
+        d3 = d3 + e2  # residual connection
+
         d2 = self.dec2(d3, e1)
         d2 = d2
-        
+
         d1 = self.dec1(d2)
 
         # 确保最终输出与输入具有相同的空间尺寸
@@ -425,7 +390,7 @@ class LowLightEnhancement(nn.Module):
 
         # d1作为残差R，添加到原始输入上
         enhanced = x + d1
-        
+
         # 最终输出
         enhanced = self.final(enhanced)
 

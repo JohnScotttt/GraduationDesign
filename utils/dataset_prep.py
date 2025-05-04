@@ -47,8 +47,8 @@ def _LOL(dataset_path: str, output_dir: str) -> None:
 
     os.makedirs(output_dir, exist_ok=True)
 
-    _write_csv(os.path.join(output_dir, 'train.csv'), train_list)
-    _write_csv(os.path.join(output_dir, 'eval.csv'), eval_list)
+    _write_csv(os.path.join(output_dir, 'train.tsv'), train_list)
+    _write_csv(os.path.join(output_dir, 'eval.tsv'), eval_list)
 
 
 def _LOLv2(dataset_path: str, output_dir: str) -> None:
@@ -62,8 +62,8 @@ def _LOLv2(dataset_path: str, output_dir: str) -> None:
 
     os.makedirs(output_dir, exist_ok=True)
 
-    _write_csv(os.path.join(output_dir, 'train.csv'), train_list)
-    _write_csv(os.path.join(output_dir, 'test.csv'), test_list)
+    _write_csv(os.path.join(output_dir, 'train.tsv'), train_list)
+    _write_csv(os.path.join(output_dir, 'test.tsv'), test_list)
 
 
 def _private(dataset_path: str, output_dir: str) -> None:

@@ -13,7 +13,7 @@ from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
 from data.dataloader import get_dataloader
-from models import LowLightEnhancement, DetailLoss
+from models import DetailLoss, LowLightEnhancement
 from utils import load_config
 
 

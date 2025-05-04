@@ -4,6 +4,10 @@ from typing import Any, Dict, List
 
 import yaml
 
+from .dataset_prep import generate_datalist
+
+__all__ = ['generate_datalist']
+
 
 def list_dir(path: str) -> List[str]:
     """
