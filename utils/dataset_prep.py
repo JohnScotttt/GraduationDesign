@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 import pandas as pd
 
-from utils import list_dir, validate_dir
+from .utils import list_dir, validate_dir
 
 
 def generate_datalist(dataset_path: str, dataset_name: str = 'LOL', output_dir: str = './') -> None:

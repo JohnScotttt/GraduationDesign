@@ -7,15 +7,13 @@ from models import LowLightEnhancement
 
 
 def count_parameters(model: torch.nn.Module) -> int:
-    """计算模型的参数量"""
+    """Calculate the number of parameters in the model."""
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def run() -> None:
-    # 设置输入尺寸
+def model_stats() -> None:
     input_sizes = [(3, 256, 256), (3, 512, 512), (3, 1024, 1024)]
 
-    # 创建模型
     model = LowLightEnhancement(
         in_channels=3,
         base_channels=64,
@@ -40,15 +38,10 @@ def run() -> None:
     model.eval()
 
     for input_size in input_sizes:
-        # 创建随机输入
         x = torch.randn(1, *input_size).to(device)
-
-        # 预热
         with torch.no_grad():
             for _ in range(10):
                 _ = model(x)
-
-        # 计时
         times = []
         iterations = 50
 
@@ -63,12 +56,11 @@ def run() -> None:
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                 end_time = time.time()
-                times.append((end_time - start_time) * 1000)  # 转为毫秒
+                times.append((end_time - start_time) * 1000)
 
         avg_time = np.mean(times)
         std_time = np.std(times)
 
-        # 输出结果
         size_str = f"{input_size[0]}×{input_size[1]}×{input_size[2]}"
         print(f"{size_str:<15} {avg_time:.2f} ± {std_time:.2f} ms")
 
