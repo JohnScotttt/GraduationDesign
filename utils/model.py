@@ -3,12 +3,7 @@ import time
 import numpy as np
 import torch
 
-from models import LowLightEnhancement
-
-
-def count_parameters(model: torch.nn.Module) -> int:
-    """Calculate the number of parameters in the model."""
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+from modules import LowLightEnhancement
 
 
 def model_stats() -> None:
@@ -24,7 +19,7 @@ def model_stats() -> None:
     )
 
     # 计算参数量
-    param_count = count_parameters(model)
+    param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"模型参数量: {param_count:,} 参数")
 
     # 计算不同输入尺寸的推理时间

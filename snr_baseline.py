@@ -12,87 +12,15 @@ import yaml
 from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
-from data.dataloader import get_dataloader
-from models import DetailLoss, LowLightEnhancement
+from modules.dataloader import get_dataloader
+from modules import DetailLoss, DetailLossResNet, LowLightEnhancement
 from utils import load_config
-
-
-# 计算PSNR（峰值信噪比）
-def calculate_psnr(img1, img2):
-    # 确保图像取值在[0,1]范围内
-    img1 = torch.clamp(img1, 0, 1)
-    img2 = torch.clamp(img2, 0, 1)
-
-    # 计算均方误差
-    mse = torch.mean((img1 - img2) ** 2, dim=[1, 2, 3])
-
-    # 计算PSNR
-    psnr = 20 * torch.log10(1.0 / torch.sqrt(mse))
-
-    return psnr.mean().item()
-
-
-# 创建高斯窗口（用于SSIM计算）
-def create_window(window_size, sigma, channels):
-    # 创建一维高斯核
-    x = torch.arange(window_size, dtype=torch.float32) - window_size // 2
-    gauss = torch.exp(-(x ** 2) / (2 * sigma ** 2))
-    gauss = gauss / gauss.sum()
-
-    # 创建二维高斯核（外积）
-    gauss_1d = gauss.unsqueeze(1)
-    gauss_2d = gauss_1d.mm(gauss_1d.t())
-
-    # 扩展到所有通道
-    window = gauss_2d.unsqueeze(0).unsqueeze(0)
-    window = window.expand(channels, 1, window_size, window_size).contiguous()
-
-    return window
-
-
-# 计算SSIM（结构相似性）
-def calculate_ssim(img1, img2, window_size=11, sigma=1.5, L=1.0):
-    # 确保图像取值在[0,1]范围内
-    img1 = torch.clamp(img1, 0, 1)
-    img2 = torch.clamp(img2, 0, 1)
-
-    # 检查尺寸
-    _, channels, _, _ = img1.shape
-
-    # 创建高斯窗口
-    device = img1.device
-    window = create_window(window_size, sigma, channels).to(device)
-
-    # 计算均值
-    mu1 = F.conv2d(img1, window, padding=window_size//2, groups=channels)
-    mu2 = F.conv2d(img2, window, padding=window_size//2, groups=channels)
-
-    mu1_sq = mu1.pow(2)
-    mu2_sq = mu2.pow(2)
-    mu1_mu2 = mu1 * mu2
-
-    # 计算方差和协方差
-    sigma1_sq = F.conv2d(img1 * img1, window,
-                         padding=window_size//2, groups=channels) - mu1_sq
-    sigma2_sq = F.conv2d(img2 * img2, window,
-                         padding=window_size//2, groups=channels) - mu2_sq
-    sigma12 = F.conv2d(img1 * img2, window,
-                       padding=window_size//2, groups=channels) - mu1_mu2
-
-    # 稳定性常数
-    C1 = (0.01 * L) ** 2
-    C2 = (0.03 * L) ** 2
-
-    # 计算SSIM
-    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
-        ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
-
-    return ssim_map.mean().item()
+from utils.metrics import calculate_psnr, calculate_ssim
 
 
 def main():
     # 加载配置文件
-    config = load_config('config.yml')
+    config = load_config('cfg/default.toml')
 
     # 设置训练参数
     epochs = int(config['epochs'])
@@ -127,7 +55,7 @@ def main():
     ).to(device)
 
     # 设置损失函数
-    criterion = DetailLoss().to(device)
+    criterion = DetailLossResNet().to(device)
 
     # 设置优化器
     optimizer = optim.Adam(

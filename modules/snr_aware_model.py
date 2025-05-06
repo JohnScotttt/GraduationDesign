@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def denoise(input_tensor: torch.Tensor) -> torch.Tensor:
+def _denoise(input_tensor: torch.Tensor) -> torch.Tensor:
     kernel_size = 3
     padding = kernel_size // 2
     kernel = torch.ones((1, 1, kernel_size, kernel_size),
@@ -14,7 +14,7 @@ def denoise(input_tensor: torch.Tensor) -> torch.Tensor:
     return F.conv2d(input_tensor, kernel, padding=padding)
 
 
-def compute_snr_map(x: torch.Tensor) -> torch.Tensor:
+def _compute_snr_map(x: torch.Tensor) -> torch.Tensor:
     # 转换为灰度图
     if x.shape[1] == 3:
         # RGB转灰度
@@ -25,7 +25,7 @@ def compute_snr_map(x: torch.Tensor) -> torch.Tensor:
         gray = x
 
     # 使用无学习的去噪操作
-    denoised = denoise(gray)
+    denoised = _denoise(gray)
 
     # 估计噪声
     noise = torch.abs(gray - denoised)
@@ -344,7 +344,7 @@ class LowLightEnhancement(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # 计算SNR图
-        snr_map = compute_snr_map(x)
+        snr_map = _compute_snr_map(x)
 
         # 编码器前向传播
         e1 = self.enc1(x)

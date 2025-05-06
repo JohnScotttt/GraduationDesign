@@ -3,18 +3,10 @@ from typing import List, Tuple
 
 import pandas as pd
 
-from .utils import list_dir, validate_dir
+from utils import list_dir, validate_dir
 
 
 def generate_datalist(dataset_path: str, dataset_name: str = 'LOL', output_dir: str = './') -> None:
-    """
-    Generate a .csv file containing the pairs of high and low image paths.
-
-    Args:
-        dataset_path (str): Path to the dataset.
-        dataset_name (str): Name of the dataset if public, otherwise 'private' or empty.
-        output_dir (str): Directory to save the output files.
-    """
     if dataset_name == 'LOL':
         _LOL(dataset_path, output_dir)
     elif dataset_name == 'LOLv2':
