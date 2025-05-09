@@ -15,7 +15,6 @@ def _denoise(input_tensor: torch.Tensor) -> torch.Tensor:
 
 
 def _compute_snr_map(x: torch.Tensor) -> torch.Tensor:
-    # 转换为灰度图
     if x.shape[1] == 3:
         # RGB转灰度
         weights = torch.tensor([0.299, 0.587, 0.114],
@@ -74,21 +73,17 @@ class SNRGuidedAttention(nn.Module):
     def forward(self, x: torch.Tensor, snr_mask: torch.Tensor) -> torch.Tensor:
         B, N, C = x.shape
 
-        # 生成query, key, value
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
                                   self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # B, num_heads, N, head_dim
 
-        # 计算注意力分数
         attn = (q @ k.transpose(-2, -1)) * self.scale  # B, num_heads, N, N
 
         # 应用SNR掩码
         mask_value = -1e9
-        snr_mask = snr_mask.unsqueeze(
-            1).expand(-1, self.num_heads, -1, -1)  # B, num_heads, N, N
+        snr_mask = snr_mask.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
         attn = attn.masked_fill(snr_mask == 0, mask_value)
 
-        # softmax和加权
         attn = attn.softmax(dim=-1)
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
@@ -254,8 +249,7 @@ class SNRAwareTransformer(nn.Module):
         # 创建SNR掩码矩阵
         snr_mask = snr_patches.reshape(B, -1)  # B, h_patches * w_patches
         threshold = 0.1  # SNR阈值
-        snr_mask = (snr_mask >= threshold).float().unsqueeze(
-            2)  # B, h_patches * w_patches, 1
+        snr_mask = (snr_mask >= threshold).float().unsqueeze(2)  # B, h_patches * w_patches, 1
         # B, h_patches * w_patches, h_patches * w_patches
         snr_attention_mask = torch.bmm(snr_mask, snr_mask.transpose(1, 2))
 
@@ -306,10 +300,10 @@ class ShortRangeBranch(nn.Module):
         return self.blocks(x)
 
 
-class LowLightEnhancement(nn.Module):
+class DetailNet(nn.Module):
     def __init__(self, in_channels=3, base_channels=64, transformer_dim=256,
                  patch_size=16, num_transformer_layers=4, num_heads=8):
-        super(LowLightEnhancement, self).__init__()
+        super(DetailNet, self).__init__()
 
         # 编码器 - 3层，步幅分别为1、2、2
         self.enc1 = EncoderBlock(
@@ -342,7 +336,7 @@ class LowLightEnhancement(nn.Module):
         # 最终输出层
         self.final = nn.Sigmoid()
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # 计算SNR图
         snr_map = _compute_snr_map(x)
 
@@ -394,4 +388,4 @@ class LowLightEnhancement(nn.Module):
         # 最终输出
         enhanced = self.final(enhanced)
 
-        return enhanced, snr_map
+        return enhanced

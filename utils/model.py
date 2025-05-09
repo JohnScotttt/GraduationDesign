@@ -3,13 +3,13 @@ import time
 import numpy as np
 import torch
 
-from modules import LowLightEnhancement
+from modules import DetailNet
 
 
 def model_stats() -> None:
     input_sizes = [(3, 256, 256), (3, 512, 512), (3, 1024, 1024)]
 
-    model = LowLightEnhancement(
+    model = DetailNet(
         in_channels=3,
         base_channels=64,
         transformer_dim=256,

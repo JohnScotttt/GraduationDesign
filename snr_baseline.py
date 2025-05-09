@@ -13,7 +13,8 @@ from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
 from modules.dataloader import get_dataloader
-from modules import DetailLoss, DetailLossResNet, LowLightEnhancement
+from modules import DetailVGGLoss, DetailResNetLoss
+from modules.detail import DetailNet
 from utils import load_config
 from utils.metrics import calculate_psnr, calculate_ssim
 
@@ -45,7 +46,7 @@ def main():
     val_loader = get_dataloader(val_tsv_file, batch_size=batch_size)
 
     # 初始化模型
-    model = LowLightEnhancement(
+    model = DetailNet(
         in_channels=int(config.get('in_channels', 3)),
         base_channels=int(config.get('base_channels', 64)),
         transformer_dim=int(config.get('transformer_dim', 256)),
@@ -55,7 +56,7 @@ def main():
     ).to(device)
 
     # 设置损失函数
-    criterion = DetailLossResNet().to(device)
+    criterion = DetailResNetLoss().to(device)
 
     # 设置优化器
     optimizer = optim.Adam(
@@ -87,7 +88,7 @@ def main():
             low_light = low_light.to(device)
             ground_truth = ground_truth.to(device)
             optimizer.zero_grad()
-            enhanced, snr_map = model(low_light)
+            enhanced = model(low_light)
             loss = criterion(enhanced, ground_truth)
             loss.backward()
             optimizer.step()
@@ -106,7 +107,6 @@ def main():
                     sample_low = low_light[sample_idx].cpu()
                     sample_enhanced = enhanced[sample_idx].cpu()
                     sample_gt = ground_truth[sample_idx].cpu()
-                    sample_snr = snr_map[sample_idx].cpu()
 
                     # 创建网格图像
                     grid = torchvision.utils.make_grid([
@@ -116,8 +116,7 @@ def main():
                     writer.add_image(
                         f'samples/train_batch_{batch_idx}', grid, epoch)
 
-                    writer.add_image(f'snr_maps/train_batch_{batch_idx}',
-                                     sample_snr, epoch, dataformats='CHW')
+                    writer.add_image(f'snr_maps/train_batch_{batch_idx}', epoch, dataformats='CHW')
 
         avg_train_loss = train_loss / len(train_loader)
         writer.add_scalar('Loss/train', avg_train_loss, epoch)
@@ -132,10 +131,10 @@ def main():
             for batch_idx, (low_light, ground_truth) in enumerate(val_pbar):
                 low_light = low_light.to(device)
                 ground_truth = ground_truth.to(device)
-                enhanced, snr_map = model(low_light)
+                enhanced = model(low_light)
                 loss = criterion(enhanced, ground_truth)
-                psnr = calculate_psnr(enhanced, ground_truth)
-                ssim = calculate_ssim(enhanced, ground_truth)
+                psnr = calculate_psnr(enhanced, ground_truth, device)
+                ssim = calculate_ssim(enhanced, ground_truth, device)
                 val_loss += loss.item()
                 val_psnr_total += psnr
                 val_ssim_total += ssim

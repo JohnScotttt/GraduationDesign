@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import VGG19_Weights, vgg19, resnet18, ResNet18_Weights
+from utils.metrics import calculate_ssim
 
 
 class CharbonnierLoss(nn.Module):
@@ -15,6 +16,25 @@ class CharbonnierLoss(nn.Module):
         return loss.mean()
 
 
+class TVLoss(nn.Module):
+    def __init__(self, TVLoss_weight=1):
+        super(TVLoss, self).__init__()
+        self.TVLoss_weight = TVLoss_weight
+
+    def forward(self, x):
+        batch_size = x.size()[0]
+        h_x = x.size()[2]
+        w_x = x.size()[3]
+        count_h = self._tensor_size(x[:, :, 1:, :])
+        count_w = self._tensor_size(x[:, :, :, 1:])
+        h_tv = torch.pow((x[:, :, 1:, :] - x[:, :, :h_x - 1, :]), 2).sum()
+        w_tv = torch.pow((x[:, :, :, 1:] - x[:, :, :, :w_x - 1]), 2).sum()
+        return self.TVLoss_weight * 2 * (h_tv / count_h + w_tv / count_w) / batch_size
+
+    def _tensor_size(self, t):
+        return t.size()[1] * t.size()[2] * t.size()[3]
+
+
 class VGGPerceptualLoss(nn.Module):
     def __init__(self):
         super(VGGPerceptualLoss, self).__init__()
@@ -26,10 +46,8 @@ class VGGPerceptualLoss(nn.Module):
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         # 归一化到VGG输入范围
-        mean = torch.tensor([0.485, 0.456, 0.406]).to(
-            pred.device).view(1, 3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).to(
-            pred.device).view(1, 3, 1, 1)
+        mean = torch.tensor([0.485, 0.456, 0.406]).to(pred.device).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).to(pred.device).view(1, 3, 1, 1)
         pred_norm = (pred - mean) / std
         target_norm = (target - mean) / std
         pred_features = self.vgg_layers(pred_norm)
@@ -56,10 +74,8 @@ class ResNetPerceptualLoss(nn.Module):
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         # 归一化到ResNet输入范围
-        mean = torch.tensor([0.485, 0.456, 0.406]).to(
-            pred.device).view(1, 3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).to(
-            pred.device).view(1, 3, 1, 1)
+        mean = torch.tensor([0.485, 0.456, 0.406]).to(pred.device).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).to(pred.device).view(1, 3, 1, 1)
         pred_norm = (pred - mean) / std
         target_norm = (target - mean) / std
         pred_features = self.resnet_layers(pred_norm)
@@ -68,9 +84,9 @@ class ResNetPerceptualLoss(nn.Module):
         return loss
 
 
-class DetailLoss(nn.Module):
+class DetailVGGLoss(nn.Module):
     def __init__(self, lambda_vgg=1.0, epsilon=1e-3):
-        super(DetailLoss, self).__init__()
+        super(DetailVGGLoss, self).__init__()
         self.charbonnier = CharbonnierLoss(epsilon)
         self.vgg_loss = VGGPerceptualLoss()
         self.lambda_vgg = lambda_vgg
@@ -79,11 +95,11 @@ class DetailLoss(nn.Module):
         l_r = self.charbonnier(detail_pred, ground_truth)
         l_vgg = self.vgg_loss(detail_pred, ground_truth)
         return l_r + self.lambda_vgg * l_vgg
-    
 
-class DetailLossResNet(nn.Module):
+
+class DetailResNetLoss(nn.Module):
     def __init__(self, lambda_resnet=1.0, epsilon=1e-3):
-        super(DetailLossResNet, self).__init__()
+        super(DetailResNetLoss, self).__init__()
         self.charbonnier = CharbonnierLoss(epsilon)
         self.resnet_loss = ResNetPerceptualLoss()
         self.lambda_resnet = lambda_resnet
@@ -94,3 +110,47 @@ class DetailLossResNet(nn.Module):
         return l_r + self.lambda_resnet * l_resnet
 
 
+class DetailSimpleLoss(nn.Module):
+    def __init__(self):
+        super(DetailSimpleLoss, self).__init__()
+        self.l1_loss = nn.L1Loss()
+        self.mse_loss = nn.MSELoss()
+
+    def forward(self, pred, target):
+        l1 = self.l1_loss(pred, target)
+        mse = self.mse_loss(pred, target)
+        return l1 + 0.5 * mse
+
+
+class DiffusionLoss(nn.Module):
+    def __init__(self):
+        super(DiffusionLoss, self).__init__()
+        self.l2_loss = nn.MSELoss()
+        self.l1_loss = nn.L1Loss()
+        self.TV_loss = TVLoss()
+
+    def forward(self, output: dict, gt: torch.Tensor) -> torch.Tensor:
+        input_high0, input_high1, gt_high0, gt_high1 = output["input_high0"], output["input_high1"], \
+            output["gt_high0"], output["gt_high1"]
+
+        pred_LL, gt_LL, pred_x, noise_output, e = output["pred_LL"], output["gt_LL"], output["pred_x"], \
+            output["noise_output"], output["e"]
+
+        # =============noise loss==================
+        noise_loss = self.l2_loss(noise_output, e)
+
+        # =============frequency loss==================
+        frequency_loss = 0.1 * (self.l2_loss(input_high0, gt_high0) +
+                                self.l2_loss(input_high1, gt_high1) +
+                                self.l2_loss(pred_LL, gt_LL)) +\
+            0.01 * (self.TV_loss(input_high0) +
+                    self.TV_loss(input_high1) +
+                    self.TV_loss(pred_LL))
+
+        # =============photo loss==================
+        content_loss = self.l1_loss(pred_x, gt)
+        ssim_loss = 1 - calculate_ssim(pred_x, gt, gt.device)
+
+        photo_loss = content_loss + ssim_loss
+
+        return noise_loss, photo_loss, frequency_loss

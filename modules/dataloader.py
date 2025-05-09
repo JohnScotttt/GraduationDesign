@@ -53,7 +53,7 @@ class LowLightDataset(Dataset):
         return low_light_tensor, gt_tensor
 
 
-def get_dataloader(tsv_file, batch_size=1, shuffle=True, num_workers=4):
+def get_dataloader(tsv_file, batch_size=1, shuffle=True, num_workers=1):
     """Create data loader for training or evaluation
     Args:
         tsv_file (string): Path to the TSV file
