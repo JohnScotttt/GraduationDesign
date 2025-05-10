@@ -170,16 +170,27 @@ def train(config_file: str = None):
     ema_helper = EMAHelper()
     ema_helper.register(model.module if is_distributed else model)
 
+    # Determine final learning rates (apply scaling if distributed)
+    final_detail_lr = cfg.detail.lr
+    final_diffusion_lr = cfg.diffusion.lr
+
+    if is_distributed and world_size_var > 1:
+        final_detail_lr = cfg.detail.lr * world_size_var
+        final_diffusion_lr = cfg.diffusion.lr * world_size_var
+        if current_rank_var == 0:
+            print(f"[INFO] Distributed training detected (world_size={world_size_var}). Scaling learning rates:")
+            print(f"  Detail LR: {cfg.detail.lr} -> {final_detail_lr}")
+            print(f"  Diffusion LR: {cfg.diffusion.lr} -> {final_diffusion_lr}")
 
     # Detail
     # Access original model using .module if distributed
     detail_model_params = (model.module if is_distributed else model).detail_net.parameters()
     if cfg.detail.optimizer == 'Adam':
         detail_optimizer = torch.optim.Adam(
-            detail_model_params, lr=cfg.detail.lr, weight_decay=cfg.detail.weight_decay)
+            detail_model_params, lr=final_detail_lr, weight_decay=cfg.detail.weight_decay)
     elif cfg.detail.optimizer == 'SGD':
         detail_optimizer = torch.optim.SGD(
-            detail_model_params, lr=cfg.detail.lr, momentum=cfg.detail.momentum)
+            detail_model_params, lr=final_detail_lr, momentum=cfg.detail.momentum)
     else:
         raise ValueError(f"Invalid optimizer: {cfg.detail.optimizer}")
 
@@ -200,11 +211,11 @@ def train(config_file: str = None):
     diffusion_model_params = (model.module if is_distributed else model).diffusion_net.parameters()
     if cfg.diffusion.optimizer == 'Adam':
         diffusion_optimizer = torch.optim.Adam(
-            diffusion_model_params, lr=cfg.diffusion.lr, weight_decay=cfg.diffusion.weight_decay,
+            diffusion_model_params, lr=final_diffusion_lr, weight_decay=cfg.diffusion.weight_decay,
             betas=(0.9, 0.999), amsgrad=cfg.diffusion.amsgrad, eps=cfg.diffusion.eps)
     elif cfg.diffusion.optimizer == 'SGD':
         diffusion_optimizer = torch.optim.SGD(
-            diffusion_model_params, lr=cfg.diffusion.lr, momentum=cfg.diffusion.momentum)
+            diffusion_model_params, lr=final_diffusion_lr, momentum=cfg.diffusion.momentum)
     else:
         raise ValueError(f"Invalid optimizer: {cfg.diffusion.optimizer}")
 
