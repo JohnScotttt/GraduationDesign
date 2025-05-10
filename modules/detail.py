@@ -80,7 +80,7 @@ class SNRGuidedAttention(nn.Module):
         attn = (q @ k.transpose(-2, -1)) * self.scale  # B, num_heads, N, N
 
         # 应用SNR掩码
-        mask_value = -1e9
+        mask_value = torch.finfo(attn.dtype).min
         snr_mask = snr_mask.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
         attn = attn.masked_fill(snr_mask == 0, mask_value)
 
