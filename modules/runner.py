@@ -166,7 +166,7 @@ def train(config_file: str = None):
         model.load_state_dict(torch.load(cfg.settings.ckpt, map_location=map_location))
 
     if is_distributed:
-        model = DDP(model, device_ids=[local_rank_var], output_device=local_rank_var, find_unused_parameters=False)
+        model = DDP(model, device_ids=[local_rank_var], output_device=local_rank_var, find_unused_parameters=True)
     ema_helper = EMAHelper()
     ema_helper.register(model.module if is_distributed else model)
 
@@ -329,12 +329,12 @@ def train(config_file: str = None):
 
         with torch.no_grad():
             for batch_idx, (low, gt) in enumerate(eval_batch_iterator):
-                low = low.to(device)
-                gt = gt.to(device)
+                low: torch.Tensor = low.to(device)
+                gt: torch.Tensor = gt.to(device)
 
                 enhance_img = (model.module if is_distributed else model).enhance(low, cfg.settings.weight) 
-                total_psnr += calculate_psnr(enhance_img, gt)
-                total_ssim += calculate_ssim(enhance_img, gt)
+                total_psnr += calculate_psnr(enhance_img, gt, gt.device)
+                total_ssim += calculate_ssim(enhance_img, gt, gt.device)
         
         if current_rank_var == 0 and isinstance(eval_batch_iterator, tqdm):
             eval_batch_iterator.close() # Ensure inner pbar is closed
