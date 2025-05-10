@@ -1,6 +1,6 @@
-numpy==2.2.5
+numpy>=2.1.2
 pandas==2.2.3
-Pillow==11.2.1
+Pillow>=11.0.0
 tomli==2.2.1
 tomli_w==1.2.0
 torch>=2.3.0+cu121
