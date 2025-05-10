@@ -15,7 +15,7 @@ class settings_params:
     early_stop: int
     conditional: bool
     sampling_timesteps: int
-
+    weight: list[float]
 
 @dataclass
 class detail_params:

@@ -3,20 +3,17 @@ import time
 import numpy as np
 import torch
 
-from modules import DetailNet
+from modules import LowLightEnhancement
+from utils import load_config
+from modules.cfg_template import params
 
 
 def model_stats() -> None:
     input_sizes = [(3, 256, 256), (3, 512, 512), (3, 1024, 1024)]
+    config = load_config('cfg/default.toml')
+    cfg = params(**config)
 
-    model = DetailNet(
-        in_channels=3,
-        base_channels=64,
-        transformer_dim=256,
-        patch_size=16,
-        num_transformer_layers=4,
-        num_heads=8
-    )
+    model = LowLightEnhancement(cfg)
 
     # 计算参数量
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -36,7 +33,7 @@ def model_stats() -> None:
         x = torch.randn(1, *input_size).to(device)
         with torch.no_grad():
             for _ in range(10):
-                _ = model(x)
+                _ = model(x, x)
         times = []
         iterations = 50
 
@@ -46,7 +43,7 @@ def model_stats() -> None:
                     torch.cuda.synchronize()
                 start_time = time.time()
 
-                _ = model(x)
+                _ = model(x, x)
 
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
