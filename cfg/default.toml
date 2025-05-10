@@ -60,3 +60,4 @@
 [loss]
     epsilon = 1e-3
     lambda_vgg = 1
+    lambda_resnet = 1

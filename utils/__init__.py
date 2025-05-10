@@ -3,6 +3,7 @@ import re
 import sys
 from typing import Any, Dict, List
 
+import tomli_w
 
 # 根据Python版本选择合适的TOML库
 if sys.version_info >= (3, 11):
@@ -39,3 +40,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
     with open(config_path, 'rb') as f:
         config = tomllib.load(f)
     return config
+
+def save_config(config: Dict[str, Any], config_path: str) -> None:
+    with open(config_path, 'wb') as f:
+        tomli_w.dump(config, f)

@@ -69,6 +69,7 @@ class diffusion_params:
 class loss_params:
     epsilon: float
     lambda_vgg: float
+    lambda_resnet: float
 
 
 @dataclass
