@@ -89,7 +89,6 @@ def train(config_file: str = None):
             if current_rank_var == 0: print('Using CPU')
             device = torch.device('cpu')
 
-    # Directory and experiment name handling
     final_experiment_name = cfg.settings.name
     if current_rank_var == 0:
         os.makedirs(cfg.settings.output_dir, exist_ok=True)
@@ -121,7 +120,7 @@ def train(config_file: str = None):
     ckpt_dir = os.path.join(exp_dir, 'ckpt')
     log_dir = os.path.join(exp_dir, 'log')
 
-    writer = None # Initialize writer for TensorBoard
+    writer = None
     if current_rank_var == 0:
         tensorboard_log_path = os.path.join(log_dir, 'tensorboard')
         writer = SummaryWriter(log_dir=tensorboard_log_path)
@@ -130,12 +129,10 @@ def train(config_file: str = None):
         save_config(dataclasses.asdict(cfg), params_file_path)
         
         log_file_path = os.path.join(log_dir, 'training_record.tsv')
-        # Write header for the log file. Overwrites if exists from a previous run for this specific experiment.
         with open(log_file_path, 'w') as f:
             f.write("epoch\ttotal_train_loss\tdetail_train_loss\tnoise_train_loss\t"
                     "photo_train_loss\tfrequency_train_loss\tval_psnr\tval_ssim\n")
 
-    # Create datasets using LowLightDataset
     train_dataset = LowLightDataset(tsv_file=cfg.settings.train_tsv_file)
     val_dataset = LowLightDataset(tsv_file=cfg.settings.eval_tsv_file)
 
@@ -337,7 +334,7 @@ def train(config_file: str = None):
                 total_ssim += calculate_ssim(enhance_img, gt, gt.device)
         
         if current_rank_var == 0 and isinstance(eval_batch_iterator, tqdm):
-            eval_batch_iterator.close() # Ensure inner pbar is closed
+            eval_batch_iterator.close()
 
         if is_distributed:
             total_psnr_tensor = torch.tensor(total_psnr).to(device)
@@ -359,12 +356,10 @@ def train(config_file: str = None):
         avg_score = 0.5 * (avg_psnr / 50) + 0.5 * avg_ssim
 
         if current_rank_var == 0: 
-            # Log to file (TSV)
             with open(log_file_path, 'a') as f:
                 f.write(f"{epoch+1}\t{avg_epoch_total_loss:.6f}\t{avg_epoch_detail_loss:.6f}\t{avg_epoch_noise_loss:.6f}\t"
                         f"{avg_epoch_photo_loss:.6f}\t{avg_epoch_frequency_loss:.6f}\t{avg_psnr:.4f}\t{avg_ssim:.4f}\n")
             
-            # TensorBoard logging
             if writer:
                 writer.add_scalar('Loss/Train/Total', avg_epoch_total_loss, epoch + 1)
                 writer.add_scalar('Loss/Train/Detail', avg_epoch_detail_loss, epoch + 1)
@@ -379,7 +374,6 @@ def train(config_file: str = None):
                 best_score = avg_score
                 torch.save(model.module.state_dict() if is_distributed else model.state_dict(), os.path.join(ckpt_dir, f'best_model.pth'))
 
-            # Update tqdm progress bar postfix with metrics
             if isinstance(epoch_iterator, tqdm):
                 epoch_iterator.set_postfix({
                     'TrainLoss': f'{avg_epoch_total_loss:.4f}',
@@ -428,7 +422,7 @@ def train(config_file: str = None):
             if current_rank_var == 0:
                 message = "\n[!] Interrupt confirmed. Training will stop after this epoch. Saving last model..."
                 if isinstance(epoch_iterator, tqdm):
-                    epoch_iterator.write(message) # tqdm-friendly way to print
+                    epoch_iterator.write(message)
                 else:
                     print(message)
             break # Break from the epoch loop for all processes
@@ -453,7 +447,7 @@ def train(config_file: str = None):
             print("Training finished. Saving final model state as last_model.pth")
         torch.save(model.module.state_dict() if is_distributed else model.state_dict(), os.path.join(ckpt_dir, f'last_model.pth'))
         
-        if writer: # Close TensorBoard writer
+        if writer:
             writer.close()
 
     if is_distributed:
