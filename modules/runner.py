@@ -24,7 +24,7 @@ class EarlyStopping:
     def __init__(self, patience=10):
         self.patience = patience
         self.counter = 0
-        self.best_score = float('inf')
+        self.best_score = 0.0
         self.early_stop = False
 
     def __call__(self, score):
