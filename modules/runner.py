@@ -263,7 +263,8 @@ def train(config_file: str = None):
             detail_output, diffusion_output = model(low, gt)
             detail_loss = detail_criterion(detail_output, gt)
             noise_loss, photo_loss, frequency_loss = diffusion_criterion(diffusion_output, gt)
-            loss = detail_loss + noise_loss + photo_loss + frequency_loss
+            loss = cfg.settings.weight[0] * detail_loss + \
+                   cfg.settings.weight[1] * (noise_loss + photo_loss + frequency_loss)
 
             epoch_total_loss_sum += loss.item()
             epoch_detail_loss_sum += detail_loss.item()
