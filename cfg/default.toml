@@ -8,7 +8,7 @@
     output_dir = "outputs"
     name = "train"
     ckpt = ""
-    early_stop = 10
+    early_stop = 30
     conditional = true
     sampling_timesteps = 100
     weight = [0.5, 0.5]
@@ -36,13 +36,12 @@
     weight_decay = 0.000
     lr = 0.0001
     momentum = 0.9 # for SGD
-    factor = 0.5
+    factor = 0.8
     patience = 5
     min_lr = 1e-7
     amsgrad = false
     eps = 0.00000001
     step_size = 50
-    gamma = 0.8
     beta_schedule = "linear"
     beta_start = 0.0001
     beta_end = 0.02

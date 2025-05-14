@@ -49,7 +49,6 @@ class diffusion_params:
     amsgrad: bool
     eps: float
     step_size: int
-    gamma: float
     beta_schedule: str
     beta_start: float
     beta_end: float

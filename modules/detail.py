@@ -370,10 +370,8 @@ class DetailNet(nn.Module):
 
         # 解码器前向传播
         d3 = self.dec3(fused_feature, e2)
-        d3 = d3 + e2  # residual connection
 
         d2 = self.dec2(d3, e1)
-        d2 = d2
 
         d1 = self.dec1(d2)
 
