@@ -20,6 +20,19 @@ class LowLightEnhancement(nn.Module):
                                     config.detail.num_transformer_layers,
                                     config.detail.num_heads)
         self.diffusion_net = DiffusionNet(config)
+        self._init_weights()
+
+    def _init_weights(self, mean=0.0, std=0.02):
+        for m in self.modules():
+            if isinstance(m, (nn.Conv2d, nn.Linear)):
+                nn.init.normal_(m.weight, mean=mean, std=std)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, (nn.BatchNorm2d, nn.LayerNorm)):
+                if m.weight is not None:
+                    nn.init.ones_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
     def forward(self, low: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
         detail_out = self.detail_net(low)
