@@ -10,6 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+import lpips  # 添加lpips导入
 
 from modules.cfg_template import params
 from modules.dataloader import LowLightDataset
@@ -453,3 +454,100 @@ def train(config_file: str = None):
 
     if is_distributed:
         dist.destroy_process_group()
+
+
+def eval(config_file: str = None, model_path: str = None):
+    """
+    评估模型在验证集上的性能
+    
+    Args:
+        config_file (str): 配置文件路径
+        model_path (str): 模型权重文件路径
+    """
+    if not model_path:
+        raise ValueError("必须提供模型权重文件路径")
+        
+    default_cfg = load_config('cfg/default.toml')
+    config = load_config(config_file) if config_file else {}
+    default_cfg.update(config)
+    cfg = params(**default_cfg)
+    
+    # 设置设备
+    if cfg.settings.device == 'cuda':
+        if not torch.cuda.is_available():
+            print('CUDA不可用，使用CPU')
+            device = torch.device('cpu')
+        else:
+            print('使用GPU')
+            device = torch.device('cuda')
+    else:
+        print('使用CPU')
+        device = torch.device('cpu')
+    
+    # 加载数据集
+    val_dataset = LowLightDataset(tsv_file=cfg.settings.eval_tsv_file)
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, 
+        batch_size=cfg.settings.batch_size,
+        num_workers=cfg.settings.num_workers, 
+        shuffle=False, 
+        pin_memory=True
+    )
+    
+    # 初始化模型
+    model = LowLightEnhancement(cfg)
+    model.to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
+    
+    # 初始化LPIPS
+    lpips_fn = lpips.LPIPS(net='alex').to(device)
+    
+    # 初始化评估指标
+    total_psnr = 0.0
+    total_ssim = 0.0
+    total_lpips = 0.0
+    
+    # 使用tqdm显示进度
+    eval_iterator = tqdm(val_loader, desc="Evaluating", unit="batch", dynamic_ncols=True)
+    
+    with torch.no_grad():
+        for batch_idx, (low, gt) in enumerate(eval_iterator):
+            low = low.to(device)
+            gt = gt.to(device)
+            
+            # 获取增强后的图像
+            enhance_img = model.enhance(low, cfg.settings.weight)
+            
+            # 计算评估指标
+            batch_psnr = calculate_psnr(enhance_img, gt, device)
+            batch_ssim = calculate_ssim(enhance_img, gt, device)
+            batch_lpips = lpips_fn(enhance_img, gt).mean().item()
+            
+            total_psnr += batch_psnr
+            total_ssim += batch_ssim
+            total_lpips += batch_lpips
+            
+            # 更新进度条
+            eval_iterator.set_postfix({
+                'PSNR': f'{batch_psnr:.4f}',
+                'SSIM': f'{batch_ssim:.4f}',
+                'LPIPS': f'{batch_lpips:.4f}'
+            })
+    
+    # 计算平均值
+    num_samples = len(val_loader)
+    avg_psnr = total_psnr / num_samples
+    avg_ssim = total_ssim / num_samples
+    avg_lpips = total_lpips / num_samples
+    
+    print("\n评估结果:")
+    print(f"PSNR: {avg_psnr:.4f}")
+    print(f"SSIM: {avg_ssim:.4f}")
+    print(f"LPIPS: {avg_lpips:.4f}")
+    
+    return {
+        'psnr': avg_psnr,
+        'ssim': avg_ssim,
+        'lpips': avg_lpips
+    }

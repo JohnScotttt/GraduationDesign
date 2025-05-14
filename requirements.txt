@@ -7,3 +7,4 @@ torch>=2.3.0+cu121
 torchmetrics==1.7.1
 torchvision>=0.18.0+cu121
 tqdm==4.67.1
+lpips==0.1.10
