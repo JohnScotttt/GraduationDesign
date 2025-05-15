@@ -5,15 +5,17 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from torchvision.transforms.functional import crop
 
 
 class LowLightDataset(Dataset):
     """Dataset for low-light image enhancement"""
 
-    def __init__(self, tsv_file):
+    def __init__(self, tsv_file, patch_size=224):
         """
         Args:
             tsv_file (string): Path to the TSV file containing pairs of low-light and ground truth image paths
+            patch_size (int): Size of the square patch to crop from the images
         """
         # Read TSV file without header
         self.data_pairs = pd.read_csv(tsv_file, sep='\t', header=None, names=[
@@ -30,6 +32,9 @@ class LowLightDataset(Dataset):
 
         # Initialize tensor conversion
         self.to_tensor = transforms.ToTensor()
+
+        # Set patch size
+        self.patch_size = patch_size
 
     def __len__(self):
         return len(self.data_pairs)
@@ -50,20 +55,30 @@ class LowLightDataset(Dataset):
         low_light_tensor = self.to_tensor(low_light_img)
         gt_tensor = self.to_tensor(gt_img)
 
+        # Get random crop coordinates
+        _, h, w = low_light_tensor.shape
+        top = torch.randint(0, h - self.patch_size + 1, (1,)).item()
+        left = torch.randint(0, w - self.patch_size + 1, (1,)).item()
+
+        # Apply the same crop to both tensors
+        low_light_tensor = crop(low_light_tensor, top, left, self.patch_size, self.patch_size)
+        gt_tensor = crop(gt_tensor, top, left, self.patch_size, self.patch_size)
+
         return low_light_tensor, gt_tensor
 
 
-def get_dataloader(tsv_file, batch_size=1, shuffle=True, num_workers=1):
+def get_dataloader(tsv_file, batch_size=1, shuffle=True, num_workers=1, patch_size=224):
     """Create data loader for training or evaluation
     Args:
         tsv_file (string): Path to the TSV file
         batch_size (int): Number of samples per batch
         shuffle (bool): Whether to shuffle the data
         num_workers (int): Number of subprocesses for data loading
+        patch_size (int): Size of the square patch to crop from the images
     Returns:
         dataloader: PyTorch DataLoader object
     """
-    dataset = LowLightDataset(tsv_file)
+    dataset = LowLightDataset(tsv_file, patch_size=patch_size)
 
     return DataLoader(
         dataset,
@@ -80,14 +95,16 @@ if __name__ == '__main__':
     train_loader = get_dataloader(
         tsv_file='path/to/train.tsv',
         batch_size=4,
-        shuffle=True
+        shuffle=True,
+        patch_size=224
     )
 
     # Create validation data loader
     val_loader = get_dataloader(
         tsv_file='path/to/val.tsv',
         batch_size=1,
-        shuffle=False
+        shuffle=False,
+        patch_size=224
     )
 
     # Test data loading

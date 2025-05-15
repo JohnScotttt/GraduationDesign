@@ -20,6 +20,7 @@ from modules.model import LowLightEnhancement
 from utils import load_config, save_config
 from utils.metrics import calculate_psnr, calculate_ssim
 
+from torch.utils.data import DataLoader
 
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -142,17 +143,17 @@ def train(config_file: str = None):
                                            rank=current_rank_var, shuffle=True)
         val_sampler = DistributedSampler(val_dataset, num_replicas=world_size_var,
                                          rank=current_rank_var, shuffle=False)
-        train_loader = torch.utils.data.DataLoader(
+        train_loader = DataLoader(
             train_dataset, batch_size=cfg.settings.batch_size,
             num_workers=cfg.settings.num_workers, sampler=train_sampler, pin_memory=True)
-        val_loader = torch.utils.data.DataLoader(
+        val_loader = DataLoader(
             val_dataset, batch_size=cfg.settings.batch_size,
             num_workers=cfg.settings.num_workers, sampler=val_sampler, pin_memory=True)
     else:
-        train_loader = torch.utils.data.DataLoader(
+        train_loader = DataLoader(
             train_dataset, batch_size=cfg.settings.batch_size,
             num_workers=cfg.settings.num_workers, shuffle=True, pin_memory=True)
-        val_loader = torch.utils.data.DataLoader(
+        val_loader = DataLoader(
             val_dataset, batch_size=cfg.settings.batch_size,
             num_workers=cfg.settings.num_workers, shuffle=False, pin_memory=True)
 
@@ -344,16 +345,14 @@ def train(config_file: str = None):
             dist.all_reduce(total_psnr_tensor, op=dist.ReduceOp.SUM)
             dist.all_reduce(total_ssim_tensor, op=dist.ReduceOp.SUM)
             
-            # For metric averaging, consider total samples if data varies per rank
-            # Simple average over (len(val_loader) * world_size_var) if batches are consistent
-            avg_psnr = total_psnr_tensor.item() / (len(val_loader.dataset) 
-                                                   if len(val_loader.dataset) > 0 else (len(val_loader) * world_size_var))
-            avg_ssim = total_ssim_tensor.item() / (len(val_loader.dataset) 
-                                                   if len(val_loader.dataset) > 0 else (len(val_loader) * world_size_var))
+            # 使用数据集的总长度作为除数
+            avg_psnr = total_psnr_tensor.item() / len(val_loader.dataset) if len(val_loader.dataset) > 0 else 0
+            avg_ssim = total_ssim_tensor.item() / len(val_loader.dataset) if len(val_loader.dataset) > 0 else 0
 
         else:
-            avg_psnr = total_psnr / len(val_loader) if len(val_loader) > 0 else 0
-            avg_ssim = total_ssim / len(val_loader) if len(val_loader) > 0 else 0
+            # 统一使用数据集总长度进行平均
+            avg_psnr = total_psnr / len(val_loader.dataset) if len(val_loader.dataset) > 0 else 0
+            avg_ssim = total_ssim / len(val_loader.dataset) if len(val_loader.dataset) > 0 else 0
 
         avg_score = 0.5 * (avg_psnr / 50) + 0.5 * avg_ssim
 
@@ -374,7 +373,7 @@ def train(config_file: str = None):
 
             if avg_score > best_score:
                 best_score = avg_score
-                torch.save(model.module.state_dict() if is_distributed else model.state_dict(), os.path.join(ckpt_dir, f'best_model.pth'))
+                torch.save(model.module.state_dict() if is_distributed else model.state_dict(), os.path.join(ckpt_dir, f'best_model_{avg_psnr:.4f}_{avg_ssim:.4f}.pth'))
 
             if isinstance(epoch_iterator, tqdm):
                 epoch_iterator.set_postfix({
@@ -536,10 +535,10 @@ def eval(config_file: str = None, model_path: str = None):
             })
     
     # 计算平均值
-    num_samples = len(val_loader)
-    avg_psnr = total_psnr / num_samples
-    avg_ssim = total_ssim / num_samples
-    avg_lpips = total_lpips / num_samples
+    num_samples = len(val_loader.dataset) # 使用数据集的总样本数
+    avg_psnr = total_psnr / num_samples if num_samples > 0 else 0
+    avg_ssim = total_ssim / num_samples if num_samples > 0 else 0
+    avg_lpips = total_lpips / num_samples if num_samples > 0 else 0
     
     print("\n评估结果:")
     print(f"PSNR: {avg_psnr:.4f}")
