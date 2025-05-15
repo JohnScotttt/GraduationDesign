@@ -12,6 +12,7 @@
     conditional = true
     sampling_timesteps = 100
     weight = [0.5, 0.5]
+    patch_size = 224
 
 [detail]
     optimizer = "Adam"

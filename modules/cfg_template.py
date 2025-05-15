@@ -16,6 +16,7 @@ class settings_params:
     conditional: bool
     sampling_timesteps: int
     weight: list[float]
+    patch_size: int
 
 @dataclass
 class detail_params:

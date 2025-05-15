@@ -135,8 +135,8 @@ def train(config_file: str = None):
             f.write("epoch\ttotal_train_loss\tdetail_train_loss\tnoise_train_loss\t"
                     "photo_train_loss\tfrequency_train_loss\tval_psnr\tval_ssim\n")
 
-    train_dataset = LowLightDataset(tsv_file=cfg.settings.train_tsv_file)
-    val_dataset = LowLightDataset(tsv_file=cfg.settings.eval_tsv_file)
+    train_dataset = LowLightDataset(tsv_file=cfg.settings.train_tsv_file, patch_size=cfg.settings.patch_size)
+    val_dataset = LowLightDataset(tsv_file=cfg.settings.eval_tsv_file, patch_size=cfg.settings.patch_size)
 
     if is_distributed:
         train_sampler = DistributedSampler(train_dataset, num_replicas=world_size_var,
@@ -333,8 +333,9 @@ def train(config_file: str = None):
                 gt: torch.Tensor = gt.to(device)
 
                 enhance_img = (model.module if is_distributed else model).enhance(low, cfg.settings.weight) 
-                total_psnr += calculate_psnr(enhance_img, gt, gt.device)
-                total_ssim += calculate_ssim(enhance_img, gt, gt.device)
+                batch_size = low.size(0)
+                total_psnr += calculate_psnr(enhance_img, gt, gt.device) * batch_size
+                total_ssim += calculate_ssim(enhance_img, gt, gt.device) * batch_size
         
         if current_rank_var == 0 and isinstance(eval_batch_iterator, tqdm):
             eval_batch_iterator.close()
@@ -518,14 +519,15 @@ def eval(config_file: str = None, model_path: str = None):
             # 获取增强后的图像
             enhance_img = model.enhance(low, cfg.settings.weight)
             
-            # 计算评估指标
+            # 计算评估指标（修正批处理计算逻辑）
+            batch_size = low.size(0)
             batch_psnr = calculate_psnr(enhance_img, gt, device)
             batch_ssim = calculate_ssim(enhance_img, gt, device)
             batch_lpips = lpips_fn(enhance_img, gt).mean().item()
             
-            total_psnr += batch_psnr
-            total_ssim += batch_ssim
-            total_lpips += batch_lpips
+            total_psnr += batch_psnr * batch_size
+            total_ssim += batch_ssim * batch_size
+            total_lpips += batch_lpips * batch_size
             
             # 更新进度条
             eval_iterator.set_postfix({
