@@ -33,12 +33,6 @@ class EarlyStopping:
             self.early_stop = True
         return self.early_stop
 
-
-# 封装 batch 进度条函数
-def batch_progress_bar(data_loader, description):
-    return tqdm(data_loader, desc=description, unit="batch", dynamic_ncols=True)
-
-
 def train(config_file: str = None):
     default_cfg = load_config('cfg/default.toml')
     config = load_config(config_file) if config_file else {}
@@ -114,10 +108,11 @@ def train(config_file: str = None):
     writer = SummaryWriter(log_dir=log_dir)
 
     best_score = 0.0
-    for epoch in range(cfg.settings.epochs):
+
+    epoch_iterator = tqdm(range(cfg.settings.epochs), desc=f"Training ({name})", unit="epoch", dynamic_ncols=True)
+
+    for epoch in epoch_iterator:
         cudnn.benchmark = True
-        # 初始化 epoch 进度条
-        epoch_iterator = tqdm(total=cfg.settings.epochs, desc="Epoch Progress", unit="epoch", dynamic_ncols=True)
 
         # train
         model.train()
@@ -127,10 +122,10 @@ def train(config_file: str = None):
         epoch_photo_loss = 0.0
         epoch_frequency_loss = 0.0
 
-        # 初始化 batch 进度条
-        batch_iterator = batch_progress_bar(train_loader, f"Training Epoch {epoch+1}")
+        train_batch_iterator = tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.settings.epochs} Training",
+                                    unit="batch", leave=False, dynamic_ncols=True)
 
-        for batch_idx, (low, gt) in enumerate(batch_iterator):
+        for batch_idx, (low, gt) in enumerate(train_batch_iterator):
             low = low.to(device)
             gt = gt.to(device)
 
@@ -149,8 +144,7 @@ def train(config_file: str = None):
             epoch_photo_loss += photo_loss.item()
             epoch_frequency_loss += frequency_loss.item()
 
-        # 更新 epoch 进度条
-        epoch_iterator.update(1)
+        train_batch_iterator.close()
 
         # Log training losses to TensorBoard
         writer.add_scalar('Loss/Total', epoch_total_loss / len(train_loader), epoch)
@@ -159,21 +153,22 @@ def train(config_file: str = None):
         writer.add_scalar('Loss/Photo', epoch_photo_loss / len(train_loader), epoch)
         writer.add_scalar('Loss/Frequency', epoch_frequency_loss / len(train_loader), epoch)
 
-        # 关闭 batch 进度条
-        batch_iterator.close()
-
         # eval
         model.eval()
         total_psnr = 0.0
         total_ssim = 0.0
+        val_batch_iterator = tqdm(val_loader, desc=f"Epoch {epoch+1}/{cfg.settings.epochs} Validation",
+                                  unit="batch", leave=False, dynamic_ncols=True)
         with torch.no_grad():
-            for batch_idx, (low, gt) in enumerate(batch_progress_bar(val_loader, "Evaluating")):
+            for batch_idx, (low, gt) in enumerate(val_batch_iterator):
                 low = low.to(device)
                 gt = gt.to(device)
 
                 enhance_img = model.enhance(low, cfg.settings.weight)
-                total_psnr += calculate_psnr(enhance_img, gt)
-                total_ssim += calculate_ssim(enhance_img, gt)
+                total_psnr += calculate_psnr(enhance_img, gt, device)
+                total_ssim += calculate_ssim(enhance_img, gt, device)
+
+            val_batch_iterator.close()
 
         avg_psnr = total_psnr / len(val_loader)
         avg_ssim = total_ssim / len(val_loader)
@@ -197,9 +192,8 @@ def train(config_file: str = None):
             scheduler.step(avg_score)
 
         torch.save(model.state_dict(), os.path.join(ckpt_dir, f'last_model.pth'))
-
-        # 关闭 epoch 进度条
-        epoch_iterator.close()
+        
+    epoch_iterator.close()
 
     # Close the TensorBoard writer
     writer.close()
@@ -234,12 +228,12 @@ def eval(config_file: str = None, model_path: str = None):
         device = torch.device('cpu')
     
     # 加载数据集
-    val_loader = get_dataloader(tsv_file=cfg.settings.eval_tsv_file,
-                                 batch_size=cfg.settings.batch_size,
-                                 shuffle=False,
-                                 num_workers=cfg.settings.num_workers,
-                                 patch_size=cfg.settings.patch_size,
-                                 )
+    val_loader = get_dataloader(tsv_file=cfg.settings.train_tsv_file,
+                                batch_size=cfg.settings.batch_size,
+                                shuffle=False,
+                                num_workers=cfg.settings.num_workers,
+                                patch_size=cfg.settings.patch_size,
+                                )
     
     # 初始化模型
     model = LowLightEnhancement(cfg)
