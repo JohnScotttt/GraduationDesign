@@ -228,7 +228,7 @@ def eval(config_file: str = None, model_path: str = None):
         device = torch.device('cpu')
     
     # 加载数据集
-    val_loader = get_dataloader(tsv_file=cfg.settings.train_tsv_file,
+    val_loader = get_dataloader(tsv_file=cfg.settings.eval_tsv_file,
                                 batch_size=cfg.settings.batch_size,
                                 shuffle=False,
                                 num_workers=cfg.settings.num_workers,
