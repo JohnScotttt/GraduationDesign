@@ -17,18 +17,18 @@ class settings_params:
     sampling_timesteps: int
     weight: list[float]
     patch_size: int
-
-@dataclass
-class detail_params:
     optimizer: str
-    scheduler: str
     lr: float
     weight_decay: float
     momentum: float
+    scheduler: str
+    step_size: int
     factor: float
     patience: int
     min_lr: float
-    step_size: int
+
+@dataclass
+class detail_params:
     in_channels: int
     base_channels: int
     transformer_dim: int
@@ -39,17 +39,6 @@ class detail_params:
 
 @dataclass
 class diffusion_params:
-    optimizer: str
-    scheduler: str
-    weight_decay: float
-    lr: float
-    momentum: float
-    factor: float
-    patience: int
-    min_lr: float
-    amsgrad: bool
-    eps: float
-    step_size: int
     beta_schedule: str
     beta_start: float
     beta_end: float

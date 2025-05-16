@@ -154,3 +154,26 @@ class DiffusionLoss(nn.Module):
         photo_loss = content_loss + ssim_loss
 
         return noise_loss, photo_loss, frequency_loss
+
+class LowLightLoss(nn.Module):
+    def __init__(self, weight=(0.5, 0.5)):
+        super().__init__()
+        self.detail_loss = DetailSimpleLoss()
+        self.diffusion_loss = DiffusionLoss()
+        self.weight = weight
+
+    def forward(self, output, gt: torch.Tensor) -> torch.Tensor:
+        # Extract the detail and diffusion outputs from the model output
+        detail_output, diffusion_output = output
+
+        # Calculate the detail loss
+        detail_loss = self.detail_loss(detail_output, gt)
+
+        # Calculate the diffusion loss
+        noise_loss, photo_loss, frequency_loss = self.diffusion_loss(diffusion_output, gt)
+
+        # Combine the losses
+        total_loss = self.weight[0] * detail_loss + \
+                     self.weight[1] * (noise_loss + photo_loss + frequency_loss)
+
+        return total_loss, detail_loss, noise_loss, photo_loss, frequency_loss
