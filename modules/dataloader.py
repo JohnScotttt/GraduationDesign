@@ -11,11 +11,12 @@ from torchvision.transforms.functional import crop
 class LowLightDataset(Dataset):
     """Dataset for low-light image enhancement"""
 
-    def __init__(self, tsv_file, patch_size=None):
+    def __init__(self, tsv_file, patch_size=None, preload=True):
         """
         Args:
             tsv_file (string): Path to the TSV file containing pairs of low-light and ground truth image paths
             patch_size (int, tuple, or None): Size of the patch to crop from the images. None means no cropping.
+            preload (bool): Whether to preload all images into memory
         """
         # Read TSV file without header
         self.data_pairs = pd.read_csv(tsv_file, sep='\t', header=None, names=[
@@ -35,6 +36,24 @@ class LowLightDataset(Dataset):
 
         # Set patch size
         self.patch_size = patch_size
+        
+        # Preload images if requested
+        self.preload = preload
+        self.preloaded_data = []
+        if preload:
+            print("Preloading images into memory...")
+            for idx in range(len(self.data_pairs)):
+                low_light_path = str(self.data_pairs.iloc[idx]['low_light'])
+                gt_path = str(self.data_pairs.iloc[idx]['ground_truth'])
+                
+                low_light_img = Image.open(low_light_path).convert('RGB')
+                gt_img = Image.open(gt_path).convert('RGB')
+                
+                low_light_tensor = self.to_tensor(low_light_img)
+                gt_tensor = self.to_tensor(gt_img)
+                
+                self.preloaded_data.append((low_light_tensor, gt_tensor))
+            print("Preloading completed!")
 
     def __len__(self):
         return len(self.data_pairs)
@@ -43,17 +62,20 @@ class LowLightDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        # Get image paths and convert to string
-        low_light_path = str(self.data_pairs.iloc[idx]['low_light'])
-        gt_path = str(self.data_pairs.iloc[idx]['ground_truth'])
+        if self.preload:
+            low_light_tensor, gt_tensor = self.preloaded_data[idx]
+        else:
+            # Get image paths and convert to string
+            low_light_path = str(self.data_pairs.iloc[idx]['low_light'])
+            gt_path = str(self.data_pairs.iloc[idx]['ground_truth'])
 
-        # Load images
-        low_light_img = Image.open(low_light_path).convert('RGB')
-        gt_img = Image.open(gt_path).convert('RGB')
+            # Load images
+            low_light_img = Image.open(low_light_path).convert('RGB')
+            gt_img = Image.open(gt_path).convert('RGB')
 
-        # Convert to tensors [0, 1]
-        low_light_tensor = self.to_tensor(low_light_img)
-        gt_tensor = self.to_tensor(gt_img)
+            # Convert to tensors [0, 1]
+            low_light_tensor = self.to_tensor(low_light_img)
+            gt_tensor = self.to_tensor(gt_img)
 
         # Decide crop size and whether to crop
         if self.patch_size is not None:
@@ -74,7 +96,7 @@ class LowLightDataset(Dataset):
         return low_light_tensor, gt_tensor
 
 
-def get_dataloader(tsv_file, batch_size=1, shuffle=True, num_workers=1, patch_size=None):
+def get_dataloader(tsv_file, batch_size=1, shuffle=True, num_workers=1, patch_size=None, preload=True):
     """Create data loader for training or evaluation
     Args:
         tsv_file (string): Path to the TSV file
@@ -82,10 +104,11 @@ def get_dataloader(tsv_file, batch_size=1, shuffle=True, num_workers=1, patch_si
         shuffle (bool): Whether to shuffle the data
         num_workers (int): Number of subprocesses for data loading
         patch_size (int, tuple, or None): Size of the patch to crop from the images. None means no cropping.
+        preload (bool): Whether to preload all images into memory
     Returns:
         dataloader: PyTorch DataLoader object
     """
-    dataset = LowLightDataset(tsv_file, patch_size=patch_size)
+    dataset = LowLightDataset(tsv_file, patch_size=patch_size, preload=preload)
 
     return DataLoader(
         dataset,
