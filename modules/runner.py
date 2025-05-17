@@ -12,7 +12,7 @@ from modules.dataloader import get_dataloader
 from modules.ddm import EMAHelper
 from modules.loss import LowLightLoss
 from modules.model import LowLightEnhancement
-from utils import load_config
+from utils import load_config, save_config
 from utils.metrics import calculate_psnr, calculate_ssim
 
 
@@ -106,7 +106,8 @@ def train(config_file: str = None):
 
     # Initialize TensorBoard SummaryWriter
     writer = SummaryWriter(log_dir=log_dir)
-
+    save_config(cfg, os.path.join(cfg.settings.output_dir, name, 'config.toml'))
+    
     best_score = 0.0
 
     epoch_iterator = tqdm(range(cfg.settings.epochs), desc=f"Training ({name})", unit="epoch", dynamic_ncols=True)

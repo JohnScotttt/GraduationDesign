@@ -155,6 +155,7 @@ class DiffusionLoss(nn.Module):
 
         return noise_loss, photo_loss, frequency_loss
 
+
 class LowLightLoss(nn.Module):
     def __init__(self, weight=(0.5, 0.5)):
         super().__init__()
@@ -162,6 +163,7 @@ class LowLightLoss(nn.Module):
         self.diffusion_loss = DiffusionLoss()
         self.weight = weight
 
+    @torch.autocast(device_type="cuda")
     def forward(self, output, gt: torch.Tensor) -> torch.Tensor:
         # Extract the detail and diffusion outputs from the model output
         detail_output, diffusion_output = output

@@ -9,7 +9,6 @@ from modules.cfg_template import params
 from modules.ddm import DiffusionNet
 from modules.detail import DetailNet
 
-
 class LowLightEnhancement(nn.Module):
     def __init__(self, config: params):
         super(LowLightEnhancement, self).__init__()
@@ -34,12 +33,14 @@ class LowLightEnhancement(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
+    @torch.autocast(device_type="cuda")
     def forward(self, low: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
         detail_out = self.detail_net(low)
         cond = torch.cat((low, gt), dim=1)
         diffusion_out = self.diffusion_net(cond)
         return detail_out, diffusion_out
 
+    @torch.autocast(device_type="cuda")
     def enhance(self, low: torch.Tensor, weight: Tuple[float, float]) -> torch.Tensor:
         detail_out = self.detail_net(low)
         b, c, h, w = low.shape

@@ -41,6 +41,20 @@ def load_config(config_path: str) -> Dict[str, Any]:
         config = tomllib.load(f)
     return config
 
-def save_config(config: Dict[str, Any], config_path: str) -> None:
+def _params_to_dict(params_obj):
+    """将params对象转换为字典格式"""
+    result = {}
+    for field in params_obj.__dataclass_fields__:
+        value = getattr(params_obj, field)
+        if hasattr(value, '__dataclass_fields__'):
+            result[field] = _params_to_dict(value)
+        else:
+            result[field] = value
+    return result
+
+def save_config(config: Any, config_path: str) -> None:
+    """保存配置到TOML文件"""
+    if hasattr(config, '__dataclass_fields__'):
+        config = _params_to_dict(config)
     with open(config_path, 'wb') as f:
         tomli_w.dump(config, f)
