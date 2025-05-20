@@ -10,3 +10,5 @@ tqdm==4.67.1
 lpips
 scikit-image
 scikit-learn
+PyWavelets>=1.4.1
+tensorboard

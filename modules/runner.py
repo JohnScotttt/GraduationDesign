@@ -1,7 +1,6 @@
 import os
 import sys
 
-import lpips
 import torch
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
@@ -200,14 +199,17 @@ def train(config_file: str = None):
     writer.close()
 
 
-def eval(config_file: str = None, model_path: str = None):
+def eval(config_file: str = None, model_path: str = None, save_images: bool = False):
     """
     评估模型在验证集上的性能
     
     Args:
         config_file (str): 配置文件路径
         model_path (str): 模型权重文件路径
+        save_images (bool): 是否保存增强后的图片
     """
+    import lpips
+
     if not model_path:
         raise ValueError("必须提供模型权重文件路径")
         
@@ -233,7 +235,6 @@ def eval(config_file: str = None, model_path: str = None):
                                 batch_size=cfg.settings.batch_size,
                                 shuffle=False,
                                 num_workers=cfg.settings.num_workers,
-                                patch_size=cfg.settings.patch_size,
                                 )
     
     # 初始化模型
@@ -249,6 +250,18 @@ def eval(config_file: str = None, model_path: str = None):
     total_psnr = 0.0
     total_ssim = 0.0
     total_lpips = 0.0
+
+    os.makedirs(cfg.settings.output_dir, exist_ok=True)
+    suffix = 1
+    name = cfg.settings.name
+    while os.path.exists(os.path.join(cfg.settings.output_dir, name)):
+        name = f"{cfg.settings.name}_{suffix}"
+        suffix += 1
+    del suffix
+    # 如果启用保存图片，创建保存目录
+    if save_images:
+        save_dir = os.path.join(cfg.settings.output_dir, name, 'eval_results')
+        os.makedirs(save_dir, exist_ok=True)
     
     # 使用tqdm显示进度
     eval_iterator = tqdm(val_loader, desc="Evaluating", unit="batch", dynamic_ncols=True)
@@ -271,6 +284,11 @@ def eval(config_file: str = None, model_path: str = None):
             total_ssim += batch_ssim * batch_size
             total_lpips += batch_lpips * batch_size
             
+            # 如果启用保存图片，保存当前批次的图片
+            if save_images:
+                from modules.save_images import save_enhanced_images
+                save_enhanced_images(enhance_img, low, gt, save_dir, batch_idx)
+            
             # 更新进度条
             eval_iterator.set_postfix({
                 'PSNR': f'{batch_psnr:.4f}',
@@ -288,6 +306,9 @@ def eval(config_file: str = None, model_path: str = None):
     print(f"PSNR: {avg_psnr:.4f}")
     print(f"SSIM: {avg_ssim:.4f}")
     print(f"LPIPS: {avg_lpips:.4f}")
+    
+    if save_images:
+        print(f"\n增强后的图片已保存到: {save_dir}")
     
     return {
         'psnr': avg_psnr,
