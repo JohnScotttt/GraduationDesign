@@ -41,6 +41,16 @@ def load_config(config_path: str) -> Dict[str, Any]:
         config = tomllib.load(f)
     return config
 
+
+def apply_changes(a: dict, b: dict) -> None:
+    for key, subdict in b.items():
+        if key not in a:
+            a[key] = subdict
+        else:
+            for subkey, value in subdict.items():
+                a[key][subkey] = value
+
+
 def _params_to_dict(params_obj):
     """将params对象转换为字典格式"""
     result = {}
@@ -51,6 +61,7 @@ def _params_to_dict(params_obj):
         else:
             result[field] = value
     return result
+
 
 def save_config(config: Any, config_path: str) -> None:
     """保存配置到TOML文件"""

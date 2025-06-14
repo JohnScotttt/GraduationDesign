@@ -11,7 +11,7 @@ from modules.dataloader import get_dataloader
 from modules.ddm import EMAHelper
 from modules.loss import LowLightLoss
 from modules.model import LowLightEnhancement
-from utils import load_config, save_config
+from utils import load_config, save_config, apply_changes
 from utils.metrics import calculate_psnr, calculate_ssim
 
 
@@ -34,9 +34,9 @@ class EarlyStopping:
 
 def train(config_file: str = None):
     default_cfg = load_config('cfg/default.toml')
-    config = load_config(config_file) if config_file else {}
+    custom_config = load_config(config_file) if config_file else {}
 
-    default_cfg.update(config)
+    apply_changes(default_cfg, custom_config)
     cfg = params(**default_cfg)
 
     if cfg.settings.device == 'cuda':
