@@ -10,7 +10,7 @@
     ckpt = ""
     early_stop = 30
     conditional = true
-    sampling_timesteps = 200
+    sampling_timesteps = 10
     weight = [0.5, 0.5]
     patch_size = 224
     optimizer = "Adam"
