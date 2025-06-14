@@ -40,13 +40,15 @@ from utils.preprocessing import generate_datalist
 generate_datalist(dataset_path, dataset_name, output_dir)
 ```
 
+This will generate a TSV file with the paths to the dataset images.
+
 ### Train with default config
 
 ```cmd
 python train.py
 ```
 
-You need to modify the ***train_tsv_file*** and ***eval_tsv_file*** in **cfg/default.toml**.
+You need to modify the **`train_tsv_file`** and **`eval_tsv_file`** in **cfg/default.toml**.
 
 ### Enhance low-light images using pre-trained model
 
@@ -56,3 +58,28 @@ You can add the following code to your Python file:
 from modules.runner import eval
 eval(config_file, model_path, save_images)
 ```
+
+## Train
+
+The key training parameters are set in **cfg/default.toml**, you can create a custom TOML file to tailor the training process.
+
+You only need to specify the parameters you want to update in your custom TOML file, and the rest will automatically use the default configurations. Such as:
+
+```toml
+[settings]
+	epochs = 100
+	name = "LOL"
+[diffusion]
+	num_diffusion_timesteps = 1000
+```
+
+Training depends on a dataset TSV file, which can be generated using the **_generate_datalist_** function in **utils/preprocessing.py**.
+
+```
+generate_datalist(dataset_path, dataset_name, output_dir)
+```
+
+Currently, only the LOLv1 and LOLv2 datasets are supported:
+
+- Set **`dataset_name="LOL"`** for the LOLv1 dataset.
+- Set **`dataset_name="LOLv2"`** for the LOLv2 dataset.
