@@ -36,6 +36,15 @@ def validate_file(path: str) -> None:
         raise IsADirectoryError(f"Path {path} is not a file.")
 
 
+def apply_changes(a: dict, b: dict) -> None:
+    for key, subdict in b.items():
+        if key not in a:
+            a[key] = subdict
+        else:
+            for subkey, value in subdict.items():
+                a[key][subkey] = value
+
+
 def load_config(config_path: str) -> Dict[str, Any]:
     with open(config_path, 'rb') as f:
         config = tomllib.load(f)
